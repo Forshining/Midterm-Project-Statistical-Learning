@@ -38,10 +38,11 @@ Y_test = as.factor(as.matrix(Y_test))
 X_test = data_test[,-which(colnames(data_test) %in% c("group"))]
 
 train_total = cbind(Y_train,X_train)
-X_train = model.matrix(Y_train~.,data = train_total)
-
+X_train = model.matrix(Y_train~.,data = train_total)[,-1]
+#X_train = as.matrix(X_train)
 test_total = cbind(Y_test,X_test)
-X_test = model.matrix(Y_test~.,data = test_total)
+X_test = model.matrix(Y_test~.,data = test_total)[,-1]
+#X_test = as.matrix(X_test)
 
 ## LASSO without splitting
 set.seed(99)
@@ -76,35 +77,35 @@ Frequency_without = (cm[1,2] + cm[2,2]) / sum(cm)
 
 ## Adaptive Lasso
 set.seed(99)
-cv.ridge_1 <- cv.glmnet(X_train, Y_train, family='binomial', alpha=0, parallel=TRUE, standardize=TRUE)
+cv.ridge_1 <- cv.glmnet(X_train, Y_train, family='binomial', alpha=0, parallel=TRUE, standardize=TRUE,nfolds = 10)
 best_ridge_coef_1 <- as.numeric(coef(cv.ridge_1, s = cv.ridge_1$lambda.min))[-1]
 
-cv.lasso_1 <- cv.glmnet(X_train, Y_train, family='binomial', alpha=1, parallel=TRUE, standardize=TRUE, type.measure='auc', penalty.factor=1/abs(best_ridge_coef_1))
+cv.lasso_1 <- cv.glmnet(X_train, Y_train, family='binomial', alpha=1, parallel=TRUE, standardize=TRUE, type.measure='auc', penalty.factor=1/abs(best_ridge_coef_1),nfolds = 10)
 plot(cv.lasso_1)
 plot(cv.lasso_1$glmnet.fit, xvar="lambda", label=TRUE)
 abline(v = log(cv.lasso_1$lambda.min))
 abline(v = log(cv.lasso_1$lambda.1se))
 coef(cv.lasso_1, s=cv.lasso_1$lambda.1se)
-coef <- coef(cv.lasso_1, s='lambda.1se')
+#coef <- coef(cv.lasso_1, s='lambda.1se')
 assess.glmnet(cv.lasso_1,newx = X_test,newy = Y_test,family = "binomial")
 ci.auc(auc(Y_test,predict(cv.lasso_1,newx = X_test, type = 'response',s = "lambda.1se")))
 
 
 
 ## LASSO with splitting
-data_train = data[train_index,]
-data_test = data[test_index,]
-data_train  = data_train[,-which(colnames(data_train) %in% select_out)]
-Y_train = data_train[,"group"]
-Y_train = as.factor(as.matrix(Y_train))
-X_train = data_train[,-which(colnames(data_train) %in% c("group"))]
-data_test  = data_test[,-which(colnames(data_test) %in% select_out)]
-Y_test = data_test[,"group"]
-Y_test = as.factor(as.matrix(Y_test))
-X_test = data_test[,-which(colnames(data_test) %in% c("group"))]
+data_train_s = data[train_index,]
+data_test_s = data[test_index,]
+data_train_s  = data_train_s[,-which(colnames(data_train_s) %in% select_out)]
+Y_train_s = data_train_s[,"group"]
+Y_train_s = as.factor(as.matrix(Y_train_s))
+X_train_s = data_train_s[,-which(colnames(data_train_s) %in% c("group"))]
+data_test_s  = data_test_s[,-which(colnames(data_test_s) %in% select_out)]
+Y_test_s = data_test_s[,"group"]
+Y_test_s = as.factor(as.matrix(Y_test_s))
+X_test_s = data_test_s[,-which(colnames(data_test_s) %in% c("group"))]
 ### For training dataset
-age_train = X_train$age
-HR_train = X_train$HR
+age_train = X_train_s$age
+HR_train = X_train_s$HR
 
 age_labels = c(1,2,3,4,5,6,7,8,9)
 age_breaks = c(10,20,30,40,50,60,70,80,90,100)
@@ -118,16 +119,17 @@ HR_breaks = c(0,60,100,Inf)
 HR_train_dummy = cut(x = HR_train, breaks = HR_breaks, labels = HR_labels,right = FALSE)
 HR_train_dummy = as.matrix(HR_train_dummy)
 
-X_train$age = age_train_dummy[,1]
-X_train$HR = HR_train_dummy[,1]
+X_train_s$age = age_train_dummy[,1]
+X_train_s$HR = HR_train_dummy[,1]
 
-train_total = cbind(Y_train,X_train)
+train_total_s = cbind(Y_train_s,X_train_s)
 
-X_train_split = model.matrix(Y_train~.,data = train_total)
+
+X_train_s = model.matrix(Y_train_s~.,data = train_total_s)[,-1]
 
 ## For test dataset
-age_test = X_test$age
-HR_test = X_test$HR
+age_test = X_test_s$age
+HR_test = X_test_s$HR
 
 age_labels = c(1,2,3,4,5,6,7,8,9)
 age_breaks = c(10,20,30,40,50,60,70,80,90,100)
@@ -141,16 +143,16 @@ HR_breaks = c(0,60,100,Inf)
 HR_test_dummy = cut(x = HR_test, breaks = HR_breaks, labels = HR_labels,right = FALSE)
 HR_test_dummy = as.matrix(HR_test_dummy)
 
-X_test$age = age_test_dummy[,1]
-X_test$HR = HR_test_dummy[,1]
+X_test_s$age = age_test_dummy[,1]
+X_test_s$HR = HR_test_dummy[,1]
 
-test_total = cbind(Y_test,X_test)
-
-X_test_split = model.matrix(Y_test~.,data = test_total)
+test_total_s = cbind(Y_test_s,X_test_s)
+#X_test_s = data.matrix(X_test_s)
+X_test_s = model.matrix(Y_test_s~.,data = test_total_s)[,-1]
 
 set.seed(99)
-model_2 = cv.glmnet(X_train_split,
-                    Y_train,
+model_2 = cv.glmnet(X_train_s,
+                    Y_train_s,
                     family = "binomial",
                     type.measure = "auc",
                     nfolds = 5,
@@ -162,22 +164,40 @@ plot(model_2)
 ### Logistic + LASSO with splitting
 
 lambda = model_2$lambda.1se
-pred = predict(model_2,newx = X_test_split, type = 'response',s = "lambda.1se")
-roc = roc.glmnet(model_2$fit.preval, newy = Y_train)
+pred = predict(model_2,newx = X_test_s, type = 'response',s = "lambda.1se")
+roc = roc.glmnet(model_2$fit.preval, newy = Y_train_s)
 best = model_2$index["min",]
 plot(roc[[best]],type = "l")
 
-assess.glmnet(model_2,newx = X_test_split,newy = Y_test,family = "binomial")
-cm = confusion.glmnet(model_2,newx = X_test_split,newy = Y_test,family = "binomial")
+assess.glmnet(model_2,newx = X_test_s,newy = Y_test_s,family = "binomial")
+cm = confusion.glmnet(model_2,newx = X_test_s,newy = Y_test_s,family = "binomial")
 
 Specificity_with = cm[1,1] / (cm[1,1] + cm[2,1])
 Sensitivity_with = cm[2,2] / (cm[2,2] + cm[1,2])
 Frequency_with = (cm[1,2] + cm[2,2]) / sum(cm)
 
+## adaptive lasso with splitting
+set.seed(99)
+cv.ridge_2 <- cv.glmnet(X_train_s, Y_train_s, family='binomial', alpha=0, parallel=TRUE, standardize=TRUE,nfolds = 10)
+#ise and min
+best_ridge_coef_2 <- as.numeric(coef(cv.ridge_2, s = cv.ridge_2$lambda.min))[-1]
+
+cv.lasso_2 <- cv.glmnet(X_train_s, Y_train_s, family='binomial', alpha=1, parallel=TRUE, standardize=TRUE, type.measure='auc', penalty.factor=1/abs(best_ridge_coef_2),nfolds = 10)
+plot(cv.lasso_2)
+plot(cv.lasso_2$glmnet.fit, xvar="lambda", label=TRUE)
+abline(v = log(cv.lasso_2$lambda.min))
+abline(v = log(cv.lasso_2$lambda.1se))
+coef(cv.lasso_2, s=cv.lasso_2$lambda.1se)
+coef <- coef(cv.lasso_2, s='lambda.1se')
+assess.glmnet(cv.lasso_2,newx = X_test_s,newy = Y_test_s,family = "binomial")
+ci.auc(auc(Y_test,predict(cv.lasso_2,newx = X_test_s, type = 'response',s = "lambda.1se")))
+
+
 
 ## xgb 
 
 library(xgboost)
-
-
+library(doParallel)
+# without splitting
+xgb_train = xgb.DMatrix(data = X_train, label = Y_train)
 
