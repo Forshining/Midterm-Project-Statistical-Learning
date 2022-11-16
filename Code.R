@@ -1,15 +1,21 @@
 ## Package Loading
-install.packages("glmnet")
-install.packages("riskRegression")
-install.packages("rms")
-install.packages("starnet")
+#install.packages("glmnet")
+#install.packages("riskRegression")
+#install.packages("rms")
+#install.packages("starnet")
+#install.packages('readxl')
 library(glmnet)
 library(riskRegression)
 library(rms)
 library(starnet)
-
+library(readxl)
+library(pROC)
 ## Data Preprocessing
-data = 修正数据
+data = read_excel('./Project Materials/修正数据.xlsx')
+# delete the obesity var
+library(dplyr)
+data <- select(data,-obesity)
+
 data = data[c(which(data$group == 1),which(data$group == 2)),]
 
 data = data[complete.cases(data),]
@@ -47,6 +53,7 @@ model_1 = cv.glmnet(X_train,
                  keep = TRUE
                  )
 
+plot(model_1)
 ## Prediction
 ### Logistic + LASSO without splitting
 lambda = model_1$lambda.1se
@@ -58,9 +65,31 @@ plot(roc[[best]],type = "l")
 assess.glmnet(model_1,newx = X_test,newy = Y_test,family = "binomial")
 cm = confusion.glmnet(model_1,newx = X_test,newy = Y_test,family = "binomial")
 
+#ACC
+sum(Y_test== predict(model_1,newx = X_test, type = 'class',s = "lambda.1se"))/length(Y_test)
+#CI
+ci.auc(auc(Y_test,pred))
+
 Specificity_without = cm[1,1] / (cm[1,1] + cm[2,1])
 Sensitivity_without = cm[2,2] / (cm[2,2] + cm[1,2])
 Frequency_without = (cm[1,2] + cm[2,2]) / sum(cm)
+
+## Adaptive Lasso
+set.seed(99)
+cv.ridge_1 <- cv.glmnet(X_train, Y_train, family='binomial', alpha=0, parallel=TRUE, standardize=TRUE)
+best_ridge_coef_1 <- as.numeric(coef(cv.ridge_1, s = cv.ridge_1$lambda.min))[-1]
+
+cv.lasso_1 <- cv.glmnet(X_train, Y_train, family='binomial', alpha=1, parallel=TRUE, standardize=TRUE, type.measure='auc', penalty.factor=1/abs(best_ridge_coef_1))
+plot(cv.lasso_1)
+plot(cv.lasso_1$glmnet.fit, xvar="lambda", label=TRUE)
+abline(v = log(cv.lasso_1$lambda.min))
+abline(v = log(cv.lasso_1$lambda.1se))
+coef(cv.lasso_1, s=cv.lasso_1$lambda.1se)
+coef <- coef(cv.lasso_1, s='lambda.1se')
+assess.glmnet(cv.lasso_1,newx = X_test,newy = Y_test,family = "binomial")
+ci.auc(auc(Y_test,predict(cv.lasso_1,newx = X_test, type = 'response',s = "lambda.1se")))
+
+
 
 ## LASSO with splitting
 data_train = data[train_index,]
@@ -127,7 +156,7 @@ model_2 = cv.glmnet(X_train_split,
                     nfolds = 5,
                     keep = TRUE
                     )
-
+plot(model_2)
 
 ## Prediction
 ### Logistic + LASSO with splitting
@@ -144,5 +173,11 @@ cm = confusion.glmnet(model_2,newx = X_test_split,newy = Y_test,family = "binomi
 Specificity_with = cm[1,1] / (cm[1,1] + cm[2,1])
 Sensitivity_with = cm[2,2] / (cm[2,2] + cm[1,2])
 Frequency_with = (cm[1,2] + cm[2,2]) / sum(cm)
+
+
+## xgb 
+
+library(xgboost)
+
 
 
