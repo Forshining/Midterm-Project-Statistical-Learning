@@ -10,10 +10,11 @@ library(rms)
 library(starnet)
 library(readxl)
 library(pROC)
+library(dplyr)
 ## Data Preprocessing
 data = read_excel('./Project Materials/修正数据.xlsx')
 # delete the obesity var
-library(dplyr)
+
 data <- select(data,-obesity)
 
 data = data[c(which(data$group == 1),which(data$group == 2)),]
@@ -198,6 +199,109 @@ ci.auc(auc(Y_test,predict(cv.lasso_2,newx = X_test_s, type = 'response',s = "lam
 
 library(xgboost)
 library(doParallel)
-# without splitting
-xgb_train = xgb.DMatrix(data = X_train, label = Y_train)
+library(caret)
 
+# without splitting
+Y_train_xgb <- as.numeric(Y_train)-1
+Y_test_xgb <- as.numeric(Y_test) -1
+
+xgb_grid = expand.grid(
+  nrounds = seq(from = 200, to = 1000, by = 100),
+  eta = c(0.1, 0.05, 0.01),
+  max_depth = c(2, 3, 4),
+  gamma = c(0,1,2,3),
+  colsample_bytree=c(0.5,1),
+  min_child_weight=c(1, 2, 3),
+  subsample=c(0.8,1)
+)
+
+my_control <-trainControl(method="cv", number=5)
+xgb_caret <- train(x=X_train, y=Y_train, method='xgbTree', trControl= my_control, tuneGrid=xgb_grid,nthread = 16,verbosity = 0,metric="Accuracy") 
+xgb_caret[["bestTune"]]
+##
+# nrounds max_depth eta gamma colsample_bytree min_child_weight subsample
+# 3293     900         3 0.1     2              0.5                3         1
+
+xgb_train <- xgb.DMatrix(data = X_train, label = Y_train_xgb)
+xgb_test <- xgb.DMatrix(data = X_test, label = Y_test)
+
+param_list = list(
+  eta = 0.1,
+  gamma = 2,
+  max_depth = 2,
+  subsample = 1,
+  colsample_bytree = 0.5,
+  subsample = 1,
+  min_child_weight = 3
+)
+
+xgbcv = xgb.cv(params = param_list,
+               nrounds = 900,
+               data = xgb_train,
+               nfold = 5,
+               print_every_n = 10,
+               maximize = F,
+               eval_metric = "auc",
+               objective = "binary:logistic")
+
+xgb <- xgb.train(data = xgb_train, params=param_list, nrounds = 900)
+xgb.ggplot.importance (xgb.importance (feature_names = colnames(X_train),model = xgb),rel_to_first = TRUE,measure = "Frequency")
+
+pre_xgb = predict(xgb,newdata = xgb_test)
+table(Y_test_xgb,round(pre_xgb),dnn=c("true","pre"))
+auc(Y_test_xgb,pre_xgb)
+roc(Y_test_xgb,pre_xgb)
+plot(roc(Y_test_xgb,pre_xgb))
+
+
+# with splitting
+Y_train_xgb_s <- as.numeric(Y_train_s)-1
+Y_test_xgb_s <- as.numeric(Y_test_s) -1
+
+xgb_grid = expand.grid(
+  nrounds = seq(from = 200, to = 1000, by = 100),
+  eta = c(0.1, 0.05, 0.01),
+  max_depth = c(2, 3, 4),
+  gamma = c(0,1,2,3),
+  colsample_bytree=c(0.5,1),
+  min_child_weight=c(1, 2, 3),
+  subsample=c(0.8,1)
+)
+
+my_control <-trainControl(method="cv", number=5)
+xgb_caret_s <- train(x=X_train_s, y=Y_train_s, method='xgbTree', trControl= my_control, tuneGrid=xgb_grid,nthread = 16,verbosity = 0,metric="Accuracy") 
+xgb_caret_s[["bestTune"]]
+##
+# nrounds max_depth  eta gamma colsample_bytree min_child_weight subsample
+# 1365     700         2 0.05     0                1                1         1
+
+xgb_train_s <- xgb.DMatrix(data = X_train_s, label = Y_train_xgb_s)
+xgb_test_s <- xgb.DMatrix(data = X_test_s, label = Y_test_s)
+
+param_list_s = list(
+  eta = 0.05,
+  gamma = 0,
+  max_depth = 2,
+  subsample = 1,
+  colsample_bytree = 1,
+  subsample = 1,
+  min_child_weight = 1
+)
+
+xgbcv_s = xgb.cv(params = param_list_s,
+               nrounds = 700,
+               data = xgb_train_s,
+               nfold = 5,
+               print_every_n = 10,
+               maximize = F,
+               eval_metric = "auc",
+               objective = "binary:logistic")
+
+xgb_s <- xgb.train(data = xgb_train_s, params=param_list_s, nrounds = 700)
+xgb.ggplot.importance (xgb.importance (feature_names = colnames(X_train_s),model = xgb_s),rel_to_first = TRUE,measure = "Frequency")
+
+pre_xgb_s = predict(xgb_s,newdata = xgb_test_s)
+table(Y_test_xgb_s,round(pre_xgb_s),dnn=c("true","pre"))
+auc(Y_test_xgb_s,pre_xgb_s)
+roc(Y_test_xgb_s,pre_xgb_s)
+plot(roc(Y_test_xgb_s,pre_xgb_s))
