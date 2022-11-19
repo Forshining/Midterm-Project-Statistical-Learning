@@ -11,16 +11,72 @@ library(starnet)
 library(readxl)
 library(pROC)
 library(dplyr)
+library(ggplot2)
+library(ggpubr)
 ## Data Preprocessing
 data = read_excel('./Project Materials/修正数据.xlsx')
-# delete the obesity var
 
+## 检查时哪一列出现缺失值
+colSums(is.na(data))
+library(VIM)
+aggr(data, prop = F, number = T)
+library(mice)
+md.pattern(data, rotate.names = TRUE)
+library(Amelia)
+missmap(data)
+
+# delete the obesity var
 data <- select(data,-obesity)
 
 data = data[c(which(data$group == 1),which(data$group == 2)),]
 
 data = data[complete.cases(data),]
 sam_size = dim(data)[1]
+
+## correlation analysis
+library(corrplot)
+data_cont = data[, c("age","HR")]
+res <- cor(data_cont)
+corrplot(res, method = "circle",
+         shade.col = NA, tl.col = "black",
+         tl.srt = 45, tl.cex = 1.5, addCoef.col = "black",
+         number.cex = 1.5, cl.pos = NULL)
+
+## eda
+data1 <- data
+data1$group[which(data1$group == 1)] <- 'DVT'
+data1$group[which(data1$group == 2)] <- 'PTE&DVT'
+names(data1)[names(data1) == 'group'] <- 'group_1'
+p1_age <- ggplot(data1, aes(x = age)) + geom_histogram()
+p2_age <- ggplot(data1, aes(x = group_1, y = age)) + geom_boxplot() + stat_summary(fun = "mean", geom = "point")
+p_age <- ggarrange(p1_age, p2_age, nrow = 1, ncol = 2)
+p_age
+# ggsave(filename = "p_age.png", plot = p_age, width = 7, height = 7)
+p1_HR <- ggplot(data1, aes(x = HR)) + geom_histogram()
+p2_HR <- ggplot(data1, aes(x = group_1, y = HR)) + geom_boxplot() + stat_summary(fun = "mean", geom = "point")
+p_HR <- ggarrange(p1_HR, p2_HR, nrow = 1, ncol = 2)
+p_HR
+# ggsave(filename = "p_HR.png", plot = p_HR, width = 7, height = 7)
+p1 <- ggplot(data1,aes(x = pVTE)) + geom_bar(aes(fill = factor(group_1)), position="dodge")
+p2 <- ggplot(data1,aes(x = BD)) + geom_bar(aes(fill = factor(group_1)), position="dodge")
+p3 <- ggplot(data1,aes(x = P2Hyper)) + geom_bar(aes(fill = factor(group_1)), position="dodge")
+p4 <- ggplot(data1,aes(x = CEALD)) + geom_bar(aes(fill = factor(group_1)), position="dodge")
+
+age_t = data1$age
+HR_t = data1$HR
+age_labels = c(1,2,3,4,5,6,7,8,9)
+age_breaks = c(10,20,30,40,50,60,70,80,90,100)
+age_t_dummy = cut(x = age_t, breaks = age_breaks, labels = age_labels,right = FALSE)
+age_t_dummy = as.matrix(age_t_dummy)
+HR_labels = c(1,2,3)
+HR_breaks = c(0,60,100,Inf)
+HR_t_dummy = cut(x = HR_t, breaks = HR_breaks, labels = HR_labels,right = FALSE)
+HR_t_dummy = as.matrix(HR_t_dummy)
+data1$age = age_t_dummy[,1]
+data1$HR = HR_t_dummy[,1]
+p_age <- ggplot(data1,aes(x = age)) + geom_bar(aes(fill = factor(group_1)), position="dodge")
+p_HR <- ggplot(data1,aes(x = HR)) + geom_bar(aes(fill = factor(group_1)), position="dodge")
+
 
 train_index = sort(sample(c(1:sam_size),floor(sam_size*0.75),replace = FALSE))
 test_index = c(1:sam_size)[-train_index]
@@ -90,6 +146,20 @@ coef(cv.lasso_1, s=cv.lasso_1$lambda.1se)
 #coef <- coef(cv.lasso_1, s='lambda.1se')
 assess.glmnet(cv.lasso_1,newx = X_test,newy = Y_test,family = "binomial")
 ci.auc(auc(Y_test,predict(cv.lasso_1,newx = X_test, type = 'response',s = "lambda.1se")))
+
+## SCAD
+library(ncvreg)
+set.seed(99)
+model_scad <- cv.ncvreg(X_train, Y_train, family=c('binomial'), penalty=c('SCAD'), nfolds=10)
+summary(model_scad)
+str(model_scad)
+plot(model_scad)
+plot(model_scad, type="rsq")
+fit_scad <- model_scad$fit
+plot(fit_scad)
+coed_scad <- coef(model_scad, s=model_scad$lambda.1se)
+auc(Y_test, predict(model_scad, X_test, type = 'class', S = 'lambda.1se'))
+roc(Y_test, predict(model_scad, X_test), plot = TRUE, ci = FALSE, print.auc = TRUE)
 
 
 
@@ -192,6 +262,19 @@ coef(cv.lasso_2, s=cv.lasso_2$lambda.1se)
 coef <- coef(cv.lasso_2, s='lambda.1se')
 assess.glmnet(cv.lasso_2,newx = X_test_s,newy = Y_test_s,family = "binomial")
 ci.auc(auc(Y_test,predict(cv.lasso_2,newx = X_test_s, type = 'response',s = "lambda.1se")))
+
+## SCAD with splitting
+set.seed(99)
+model_scad_s <- cv.ncvreg(X_train_s, Y_train_s, family=c('binomial'), penalty=c('SCAD'), nfolds=10)
+summary(model_scad)
+str(model_scad)
+plot(model_scad_s)
+plot(model_scad_s, type="rsq")
+fit_scad_s <- model_scad_s$fit
+plot(fit_scad_s)
+coed_scad_s <- coef(model_scad_s, s=model_scad_s$lambda.1se)
+auc(Y_test_s, predict(model_scad_s, X_test_s, type = 'class', S = 'lambda.1se'))
+roc(Y_test_s, predict(model_scad_s, X_test_s), plot = TRUE, ci = FALSE, print.auc = TRUE)
 
 
 
