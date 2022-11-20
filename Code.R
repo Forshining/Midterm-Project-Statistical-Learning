@@ -4,6 +4,8 @@
 #install.packages("rms")
 #install.packages("starnet")
 #install.packages('readxl')
+#install.packages("selectiveInference")
+#install.packages("EbayesThresh")
 library(glmnet)
 library(riskRegression)
 library(rms)
@@ -13,6 +15,9 @@ library(pROC)
 library(dplyr)
 library(ggplot2)
 library(ggpubr)
+library(selectiveInference)
+library(EbayesThresh)
+
 ## Data Preprocessing
 data = read_excel('./Project Materials/修正数据.xlsx')
 
@@ -119,6 +124,15 @@ pred = predict(model_1,newx = X_test, type = 'response',s = "lambda.1se")
 roc = roc.glmnet(model_1$fit.preval, newy = Y_train)
 best = model_1$index["min",]
 plot(roc[[best]],type = "l")
+beta = coef(model_1,s = lambda/dim(X_train)[1])[,1]
+
+Inference_without = fixedLassoInf(X_train,
+                                  as.numeric(Y_train),
+                                  beta = beta,
+                                  lambda = lambda,
+                                  family = "binomial")
+
+p_value = threshld(Inference_without[["pv"]],1e-3,hard = TRUE)
 
 assess.glmnet(model_1,newx = X_test,newy = Y_test,family = "binomial")
 cm = confusion.glmnet(model_1,newx = X_test,newy = Y_test,family = "binomial")
@@ -239,6 +253,15 @@ pred = predict(model_2,newx = X_test_s, type = 'response',s = "lambda.1se")
 roc = roc.glmnet(model_2$fit.preval, newy = Y_train_s)
 best = model_2$index["min",]
 plot(roc[[best]],type = "l")
+beta = coef(model_2,s = lambda/dim(X_train)[1])[,1]
+
+Inference_without = fixedLassoInf(X_train_s,
+                                  as.numeric(Y_train_s),
+                                  beta = beta,
+                                  lambda = lambda,
+                                  family = "binomial")
+
+p_value_s = threshld(Inference_without[["pv"]],1e-3,hard = TRUE)
 
 assess.glmnet(model_2,newx = X_test_s,newy = Y_test_s,family = "binomial")
 cm = confusion.glmnet(model_2,newx = X_test_s,newy = Y_test_s,family = "binomial")
