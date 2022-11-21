@@ -124,7 +124,7 @@ pred = predict(model_1,newx = X_test, type = 'response',s = "lambda.1se")
 roc = roc.glmnet(model_1$fit.preval, newy = Y_train)
 best = model_1$index["min",]
 plot(roc[[best]],type = "l")
-beta = coef(model_1,s = lambda/dim(X_train)[1])[,1]
+beta = coef(model_1,s = lambda)[,1]
 
 Inference_without = fixedLassoInf(X_train,
                                   as.numeric(Y_train),
@@ -253,7 +253,7 @@ pred = predict(model_2,newx = X_test_s, type = 'response',s = "lambda.1se")
 roc = roc.glmnet(model_2$fit.preval, newy = Y_train_s)
 best = model_2$index["min",]
 plot(roc[[best]],type = "l")
-beta = coef(model_2,s = lambda/dim(X_train)[1])[,1]
+beta = coef(model_2,s = lambda)[,1]
 
 Inference_without = fixedLassoInf(X_train_s,
                                   as.numeric(Y_train_s),
